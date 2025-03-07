@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.1.1 (2025-03-07)
+
+### Documentation
+
+* Added README ([`dd61687`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/dd61687562482dca3be57ec9bcedc18083a52ead))
+
 ## v0.1.0 (2025-03-07)
 
 ### Feature
