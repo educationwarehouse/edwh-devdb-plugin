@@ -3,6 +3,7 @@ Local namespace: `edwh help devdb`
 """
 
 import datetime
+import multiprocessing
 import shutil
 import textwrap
 import typing as t
@@ -109,6 +110,7 @@ def snapshot(
     without_event_stream=True,
     # without_session=True,
     without_cache=True,
+    compress: bool = False,
 ):
     """
     Takes a snapshot of the development database for use with push, pop and recover.
@@ -122,6 +124,7 @@ def snapshot(
     - without_event_stream (bool): If `True`, ignores the deprecated yet historically relevant event_stream table. Default is `True`.
     - without_session (bool): If `True`, ignores the session table. Default is `True`.
     - without_cache (bool): If `True`, ignores the cache table. Default is `True`.
+    - compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
 
     Example:
     server$ ew devdb.snapshot
@@ -172,12 +175,15 @@ def snapshot(
     )
     postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
 
+    # by default avoid compression for use with Restic
+    compress_arg = "--compress=lz4" if compress else "-Z 0"
+
     cmd = (
         f"{DOCKER_COMPOSE} run -T --rm migrate "  # run within this container, remote docker residue
         "pg_dump "
         "-F d "  # directory format
-        "-j 3 "  # threads
-        "-Z 0 "  # avoid compression for use with Restic
+        f"-j {multiprocessing.cpu_count() - 1} "  # threads
+        f"{compress_arg} "
         f"{excludes}"
         "-f /data/snapshot "  # in the ./migrate/data folder mounted as /data
         f'"{postgres_uri}"'
@@ -303,7 +309,7 @@ def recover(ctx: Context, name: str = "snapshot"):
         "pg_restore "
         "--no-owner "  # anders verkeerde schema
         "--no-acl "  # schijnbaar ook nodig.
-        "-j 3 "  # threads
+        f"-j {multiprocessing.cpu_count() -1} "  # threads
         f'-d "{postgres_uri}" '  # target database
         f"/data/{folder.name}"
     )  # in this folder
