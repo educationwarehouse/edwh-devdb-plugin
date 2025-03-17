@@ -309,7 +309,7 @@ def recover(ctx: Context, name: str = "snapshot"):
         "pg_restore "
         "--no-owner "  # anders verkeerde schema
         "--no-acl "  # schijnbaar ook nodig.
-        f"-j {multiprocessing.cpu_count() -1} "  # threads
+        f"-j {multiprocessing.cpu_count() - 1} "  # threads
         f'-d "{postgres_uri}" '  # target database
         f"/data/{folder.name}"
     )  # in this folder
@@ -357,8 +357,10 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
 
     download_url = response.text.strip()
     delete_url = response.headers.get("x-url-delete")
-    print("\ndownload/prepare using:")
+    print("\ndownload using:")
     cprint(f"$ edwh devdb.pop {download_url}", color="blue")
+    print("\ndownload and immediately use using:")
+    cprint(f"$ edwh devdb.reset --pop {download_url}", color="blue")
     print("\nDelete using:")
     cprint(f"$ edwh file.delete {delete_url}", color="blue")
 
@@ -393,22 +395,34 @@ def pop(ctx: Context, url: str):
         files_plugin.download(ctx, url, unpack=True)
 
     print("recover using:")
-    cprint("$ ew devdb.recover # or devdb.reset", color="blue")
+    cprint("$ edwh devdb.reset", color="blue")
 
 
-@task()
+@task(flags={"with_pop": ("pop", "p")})
 def reset(
     ctx: Context,
     yes: bool = False,
     wait: int = 0,
     skip_up: bool = False,
     name: str = "snapshot",
+    with_pop: t.Optional[str] = None,
 ):
     """
     Reset your database to the latest devdb (wipe, recover, migrate etc.)
+
+    Args:
+        ctx: invoke context
+        yes: don't ask before wiping database
+        wait: deprecated
+        skip_up: by default, `edwh up` is called after the process is done. add `--skip-up` to prevent this.
+        name: name of the snapshot to use.
+        with_pop: snapshot url to download (pop) before restoring
     """
     if wait:
         cprint("Note: --wait is deprecated in favour of health checks!", color="yellow")
+
+    if with_pop:
+        pop(ctx, with_pop)
 
     edwh.tasks.stop(ctx)
     edwh.tasks.wipe_db(ctx, yes=yes)
