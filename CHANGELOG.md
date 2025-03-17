@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.3.0 (2025-03-17)
+
+### Feature
+
+* **reset:** Add `--pop` option to download a backup before resetting ([`969fdba`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/969fdba6b2d905791fcdacd912fffa8bf440ad9f))
+
 ## v0.2.0 (2025-03-15)
 
 ### Feature
