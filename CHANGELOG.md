@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.3.1 (2025-03-21)
+
+### Fix
+
+* Don't hook `setup` by default (we don't always want `POSTGRES` for every `setup`) ([`858fba4`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/858fba4df35dcdaa0c6ebb1881c528861a648208))
+
 ## v0.3.0 (2025-03-17)
 
 ### Feature
