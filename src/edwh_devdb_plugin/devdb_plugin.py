@@ -44,7 +44,7 @@ def ensure_snapshots_folder(name: str = "snapshot") -> Path:
     return snapshots_folder
 
 
-@task()
+@task(hookable=False)
 def setup(c: Context):
     use_default = edwh.get_env_value("ACCEPT_DEFAULTS", "0") == "1"
 
