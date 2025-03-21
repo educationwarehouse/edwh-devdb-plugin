@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.4.0 (2025-03-21)
+
+### Feature
+
+* **snapshot:** Replace hardcoded `--exclude-*` with config from .toml or manual override (e.g. `--exclude public.table`) ([`88130f4`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/88130f4e9067582cda820c91d0f5cc3d86230590))
+
 ## v0.3.1 (2025-03-21)
 
 ### Fix
