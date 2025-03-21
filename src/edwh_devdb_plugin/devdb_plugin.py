@@ -2,6 +2,7 @@
 Local namespace: `edwh help devdb`
 """
 
+import contextlib
 import datetime
 import multiprocessing
 import shutil
@@ -14,8 +15,10 @@ import edwh
 import humanize
 import invoke
 import tabulate
+import tomlkit
 from edwh import DOCKER_COMPOSE
 from edwh import improved_task as task
+from edwh.constants import DEFAULT_TOML_NAME, FALLBACK_TOML_NAME, LEGACY_TOML_NAME
 from edwh_files_plugin import files_plugin
 from edwh_files_plugin.files_plugin import CliCompressionTypes
 from invoke import Context
@@ -94,22 +97,44 @@ def setup(c: Context):
     )
 
 
+"""
+Todo:
+- don't harcode tables to exclude
+- load from `default.toml` or `.toml` (c
+"""
+
+
+def find_devdb_config():
+    for toml_name in (DEFAULT_TOML_NAME, FALLBACK_TOML_NAME, LEGACY_TOML_NAME):
+        with contextlib.suppress(Exception):
+            path = Path(toml_name)
+            data = tomlkit.loads(path.read_text())
+            return data["devdb"]
+
+    # nothing found :(
+    return {}
+
+
+def find_tables_to_exclude(
+    exclude: list[str] = (),
+):
+    return exclude or find_devdb_config().get("exclude") or []
+
+
 @task(
     help=dict(
-        without_api_activity="Ignore deprecated yet historicly relevant api_activity table",
-        without_applog="Ignore the currently used signal, evidence and sesssion tables",
-        without_event_stream="Ignore deprecated yet historicly relevant event_stream",
-        without_cache="Ignore the cache",
+        exclude="Tables to exclude (otherwise loaded from devdb.exclude in .toml)",
     ),
+    iterable=("exclude",),
+    flags={
+        "backup_all": ("all", "a"),
+    },
     pre=[edwh.tasks.require_sudo],
 )
 def snapshot(
     ctx: Context,
-    without_api_activity=True,
-    without_applog=True,
-    without_event_stream=True,
-    # without_session=True,
-    without_cache=True,
+    exclude: list[str],
+    backup_all: bool = False,
     compress: bool = False,
 ):
     """
@@ -119,11 +144,8 @@ def snapshot(
     This file leaves out the largest tables that aren't used regularly when developing ensuring quick processing.
 
     Optional parameters:
-    - without_api_activity (bool): If `True`, ignores the deprecated yet historically relevant api_activity table. Default is `True`.
-    - without_applog (bool): If `True`, ignores the currently used signal, evidence, and session tables. Default is `True`.
-    - without_event_stream (bool): If `True`, ignores the deprecated yet historically relevant event_stream table. Default is `True`.
-    - without_session (bool): If `True`, ignores the session table. Default is `True`.
-    - without_cache (bool): If `True`, ignores the cache table. Default is `True`.
+    - exclude (list): tables to exclude. If not selected, the `devdb.exclude` value in .toml or default.toml is used.
+    - all (boolean): ignore 'exclude', backup all tables.
     - compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
 
     Example:
@@ -161,18 +183,10 @@ def snapshot(
     ctx.sudo(f"chown -R 1050:1050 {snapshots_folder}")
     ctx.sudo(f"chmod -R 770 {snapshots_folder}")
 
-    excludes = "".join(
-        [
-            (" --exclude-table-data=public.api_activity " if without_api_activity else " "),
-            (" --exclude-table-data=public.evidence " if without_applog else " "),
-            (" --exclude-table-data=signal.signal " if without_applog else " "),
-            (" --exclude-table-data=signal.evidence " if without_applog else " "),
-            (" --exclude-table-data=public.signal " if without_applog else " "),
-            (" --exclude-table-data=public.event_stream " if without_event_stream else " "),
-            (" --exclude-table-data=public.session " if without_applog else ""),
-            (" --exclude-table-data=public.cache " if without_cache else ""),
-        ]
-    )
+    exclude = [] if backup_all else find_tables_to_exclude(exclude)
+
+    excludes = "".join([f" --exclude-table-data={table} " for table in exclude])
+
     postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
 
     # by default avoid compression for use with Restic
@@ -222,15 +236,12 @@ def snapshot_full(
     """
     return snapshot(
         ctx,
-        without_api_activity=False,
-        without_applog=False,
-        without_cache=False,
-        without_event_stream=False,
+        backup_all=True,
     )
 
 
 @task
-def rename(ctx: Context, name: str):
+def rename(_: Context, name: str):
     folder = ensure_snapshots_folder()
     if not any(folder.glob("*")):
         print("Failure: create a snapshot first")
