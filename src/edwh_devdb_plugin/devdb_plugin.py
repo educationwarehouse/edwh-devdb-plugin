@@ -379,7 +379,7 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
 
 
 @task()
-def pop(ctx: Context, url: str):
+def pop(ctx: Context, url: str, yes: bool = False):
     """
     Prepares the the development database snapshot from the given URL.
 
@@ -394,13 +394,13 @@ def pop(ctx: Context, url: str):
     """
     folder = ensure_snapshots_folder()
     if any(folder.glob("*")):
-        if not edwh.confirm("A snapshot already exists. Overwrite? [Yn]", default=True):
-            print("Not overwriting, okay.")
-            return
-        else:
+        if yes or edwh.confirm("A snapshot already exists. Overwrite? [Yn]", default=True):
             print(f"Flushing {folder}")
             shutil.rmtree(folder)
             folder.mkdir()
+        else:
+            print("Not overwriting, okay.")
+            return
 
     with chdir(folder.parent):
         files_plugin.download(ctx, url, unpack=True)
@@ -433,7 +433,7 @@ def reset(
         cprint("Note: --wait is deprecated in favour of health checks!", color="yellow")
 
     if with_pop:
-        pop(ctx, with_pop)
+        pop(ctx, with_pop, yes=yes)
 
     edwh.tasks.stop(ctx)
     edwh.tasks.wipe_db(ctx, yes=yes)
