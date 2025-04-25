@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.4.1 (2025-04-25)
+
+### Fix
+
+* Pass `--yes` to `devdb.pop` when running `devdb.reset --pop` ([`7e29ebb`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/7e29ebb6661adc2094deb2ccf518b1fc854f8ba0))
+
 ## v0.4.0 (2025-03-21)
 
 ### Feature
