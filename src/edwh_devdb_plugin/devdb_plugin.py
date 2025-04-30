@@ -133,7 +133,7 @@ def find_tables_to_exclude(
 )
 def snapshot(
     ctx: Context,
-    exclude: list[str],
+    exclude: list[str] = list,
     backup_all: bool = False,
     compress: bool = False,
 ):
@@ -237,7 +237,6 @@ def snapshot_full(
     """
     return snapshot(
         ctx,
-        exclude=[],
         backup_all=True,
     )
 
