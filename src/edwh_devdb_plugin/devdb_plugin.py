@@ -176,6 +176,7 @@ def snapshot(
     developer_machine$ ew up
     # bring everything up
     """
+    print(f"LEMME HEAR YOU BUYS SAY ARE YOU TRUE? {backup_all}")
     snapshots_folder = Path("./migrate/data/snapshot")
 
     ctx.sudo(f"rm -rf {snapshots_folder}")
@@ -187,7 +188,7 @@ def snapshot(
 
     excludes = "".join([f" --exclude-table-data={table} " for table in exclude])
 
-    postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI") # this is broken, first learn how it works before you try to fix it.
+    postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
 
     # by default avoid compression for use with Restic
     compress_arg = "--compress=lz4" if compress else "-Z 0"
@@ -200,7 +201,7 @@ def snapshot(
         f"{compress_arg} "
         f"{excludes}"
         "-f /data/snapshot "  # in the ./migrate/data folder mounted as /data
-        # f'"{postgres_uri}"' # turn this back on later pls.
+        f'"{postgres_uri}"'
     )
 
     result = run_in_background_with_animation(
@@ -236,6 +237,7 @@ def snapshot_full(
     """
     return snapshot(
         ctx,
+        exclude=[],
         backup_all=True,
     )
 
