@@ -133,7 +133,7 @@ def find_tables_to_exclude(
 )
 def snapshot(
     ctx: Context,
-    exclude: list[str] = list,
+    exclude: list[str],
     backup_all: bool = False,
     compress: bool = False,
 ):
@@ -176,7 +176,6 @@ def snapshot(
     developer_machine$ ew up
     # bring everything up
     """
-    print(f"LEMME HEAR YOU BUYS SAY ARE YOU TRUE? {backup_all}")
     snapshots_folder = Path("./migrate/data/snapshot")
 
     ctx.sudo(f"rm -rf {snapshots_folder}")
@@ -237,6 +236,7 @@ def snapshot_full(
     """
     return snapshot(
         ctx,
+        exclude=[],
         backup_all=True,
     )
 
