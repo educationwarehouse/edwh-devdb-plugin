@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.4.2 (2025-05-01)
+
+### Fix
+
+* Snapshot-full should work again ([`a844ff7`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/a844ff7e0c5304c0a7eef09b959d5b87c0704982))
+
 ## v0.4.1 (2025-04-25)
 
 ### Fix
