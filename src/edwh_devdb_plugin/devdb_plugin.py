@@ -32,7 +32,7 @@ COLLECTIVES_URL = "https://c.meteddie.nl/c/nextcloud/sqZlx4CNRHySxDQwKYFY0w/8336
 MINIMAL_REQUIRED_EDWH_FILES_VERSION = "1.1.0"
 
 
-def ensure_snapshots_folder(name: str = "snapshot") -> Path:
+def ensure_snapshots_folder(name: str = "snapshot", create: bool = True) -> Path:
     """
     Ensure that the snapshots folder exists.
 
@@ -43,8 +43,13 @@ def ensure_snapshots_folder(name: str = "snapshot") -> Path:
     """
     if name != "snapshot" and not name.endswith(".snapshot"):
         name += ".snapshot"
-    snapshots_folder = Path(f"./migrate/data/{name}")
-    snapshots_folder.mkdir(exist_ok=True)
+    snapshots_folder = Path("./migrate/data") / name
+    if create:
+        snapshots_folder.mkdir(exist_ok=True)
+    elif not snapshots_folder.exists():
+        print(f"Error: snapshot '{name}' not found.")
+        exit(1)
+
     return snapshots_folder
 
 
@@ -435,6 +440,9 @@ def reset(
 
     if with_pop:
         pop(ctx, with_pop, yes=yes)
+
+    if name:
+        ensure_snapshots_folder(name, create=False)
 
     edwh.tasks.stop(ctx)
     edwh.tasks.wipe_db(ctx, yes=yes)
