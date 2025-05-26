@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.4.3 (2025-05-26)
+
+### Fix
+
+* Check if snapshot exists before running reset sequence ([`81e62c8`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/81e62c8832f8d8925d79d5fbb442267b4b8ff132))
+
 ## v0.4.2 (2025-05-01)
 
 ### Fix
