@@ -141,6 +141,7 @@ def snapshot(
     exclude: list[str],
     backup_all: bool = False,
     compress: bool = False,
+    name: str = "snapshot",
 ):
     """
     Takes a snapshot of the development database for use with push, pop and recover.
@@ -181,7 +182,7 @@ def snapshot(
     developer_machine$ ew up
     # bring everything up
     """
-    snapshots_folder = Path("./migrate/data/snapshot")
+    snapshots_folder = snapshots_folder = ensure_snapshots_folder(name)
 
     ctx.sudo(f"rm -rf {snapshots_folder}")
     ctx.sudo(f"mkdir -p {snapshots_folder}")
