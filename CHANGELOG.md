@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.4.4 (2025-06-13)
+
+### Fix
+
+* Also support passing `--name` when creating a snapshot (in addition to when restoring one) ([`c004df6`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/c004df672b0ef58c1f094490fe78c499005db2c6))
+
 ## v0.4.3 (2025-05-26)
 
 ### Fix
