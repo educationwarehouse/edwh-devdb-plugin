@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.4.8 (2025-06-16)
+
+### Fix
+
+* Also support `--name` for `devdb.pop` pt3 ([`1a76f00`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/1a76f003715a2a1733fa73da45b144acc25387e1))
+
 ## v0.4.7 (2025-06-16)
 
 ### Fix
