@@ -415,7 +415,9 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
             return
 
     with chdir(folder.parent):
-        files_plugin.download(ctx, url, output_file=folder, unpack=True)
+        ext = url.split(".")[-1]
+        tmp_file = folder.with_suffix(ext)
+        files_plugin.download(ctx, url, output_file=tmp_file, unpack=True)
 
     print("recover using:")
     cprint("$ edwh devdb.reset", color="blue")
