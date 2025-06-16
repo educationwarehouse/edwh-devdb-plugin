@@ -148,10 +148,11 @@ def snapshot(
     Send this using `ew devdb.push`.
     This file leaves out the largest tables that aren't used regularly when developing ensuring quick processing.
 
-    Optional parameters:
-    - exclude (list): tables to exclude. If not selected, the `devdb.exclude` value in .toml or default.toml is used.
-    - all (boolean): ignore 'exclude', backup all tables.
-    - compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
+    Args:
+        ctx: invoke context
+        exclude (list): tables to exclude. If not selected, the `devdb.exclude` value in .toml or default.toml is used.
+        backup_all (boolean): ignore 'exclude', backup all tables.
+        compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
 
     Example:
     server$ ew devdb.snapshot
@@ -384,21 +385,25 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
     print(f"\nVergeet niet om de URL ook bij te werken op collectives: {COLLECTIVES_URL}")
 
 
-@task()
-def pop(ctx: Context, url: str, yes: bool = False):
+@task(
+    aliases=("pull",),
+)
+def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
     """
     Prepares the the development database snapshot from the given URL.
 
-    Parameters:
-    - url (str): The URL of the snapshot to download and populate the database with.
+    Args:
+        url (str): The URL of the snapshot to download and populate the database with.
                  You get this url after a succesful `ew devdb.push`.
+        yes: don't ask permission to overwrite existing
+        name: store as a specific name instead of 'snapshot'
 
     Run `ew help devdb.snapshot` for more info.
 
     Example Usage:
     #> ew devdb.pop https://example.com/snapshot.zip
     """
-    folder = ensure_snapshots_folder()
+    folder = ensure_snapshots_folder(name)
     if any(folder.glob("*")):
         if yes or edwh.confirm("A snapshot already exists. Overwrite? [Yn]", default=True):
             print(f"Flushing {folder}")
