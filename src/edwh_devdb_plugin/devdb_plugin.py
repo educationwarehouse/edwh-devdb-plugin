@@ -416,7 +416,7 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
 
     with chdir(folder.parent):
         ext = url.split(".")[-1]
-        tmp_file = folder.with_suffix(f".{ext}")
+        tmp_file = Path(folder.name).with_suffix(f".{ext}")
         files_plugin.download(ctx, url, output_file=tmp_file, unpack=True)
 
     print("recover using:")
