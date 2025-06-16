@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.0 (2025-06-16)
+
+### Feature
+
+* Also support `--name` for `devdb.pop` (+ add `devdb.pull` alias) ([`042b1d6`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/042b1d6f6ff5edd75372b95333b46d39c90bf1be))
+
 ## v0.4.10 (2025-06-16)
 
 ### Fix
