@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.1 (2025-06-24)
+
+### Fix
+
+* Allow `--name` for `push` ([`fe2ab35`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/fe2ab356da0df3e3531b08429a81b3972f1815c5))
+
 ## v0.5.0 (2025-06-16)
 
 ### Feature
