@@ -249,8 +249,8 @@ def snapshot_full(
 
 
 @task
-def rename(_: Context, name: str):
-    folder = ensure_snapshots_folder()
+def rename(_: Context, name: str, snapshot: str = "snapshot"):
+    folder = ensure_snapshots_folder(snapshot, create=False)
     if not any(folder.glob("*")):
         print("Failure: create a snapshot first")
         return
@@ -269,7 +269,7 @@ def show_list(_: Context):
 
     Local only.
     """
-    folder = ensure_snapshots_folder()
+    folder = ensure_snapshots_folder(create=False)
     parent_folder = folder.parent
     if snapshot_dirs := [
         d for d in parent_folder.iterdir() if d.is_dir() and d.name.endswith(".snapshot") or d.name == "snapshot"
@@ -349,7 +349,7 @@ def recover(ctx: Context, name: str = "snapshot"):
 
 
 @task()
-def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_level: int = 5):
+def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_level: int = 5, name: str = "snapshot"):
     """
     Pushes the local development database to a remote server.
 
@@ -362,7 +362,7 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
     Example Usage:
     #> ew devdb.push
     """
-    folder = ensure_snapshots_folder()
+    folder = ensure_snapshots_folder(name)
     if not any(folder.glob("*")):
         print("Failure: will not push an empty folder")
         return
