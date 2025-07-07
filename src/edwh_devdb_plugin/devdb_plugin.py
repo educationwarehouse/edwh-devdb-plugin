@@ -43,7 +43,10 @@ def ensure_snapshots_folder(name: str = "snapshot", create: bool = True) -> Path
     """
     if name != "snapshot" and not name.endswith(".snapshot"):
         name += ".snapshot"
-    snapshots_folder = Path("./migrate/data") / name
+
+    parent = Path("./migrate/data")
+    parent.mkdir(exist_ok=True, parents=True)
+    snapshots_folder = parent / name
     if create:
         snapshots_folder.mkdir(exist_ok=True)
     elif not snapshots_folder.exists():
@@ -416,7 +419,12 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
 
     with chdir(folder.parent):
         ext = url.split(".")[-1]
-        tmp_file = Path(folder.name).with_suffix(f".snapshot.{ext}")
+
+        if folder.name == "snapshot":
+            tmp_file = Path(folder.name).with_suffix(f".{ext}")
+        else:
+            tmp_file = Path(folder.name).with_suffix(f".snapshot.{ext}")
+
         files_plugin.download(ctx, url, output_file=tmp_file, unpack=True)
 
     print("recover using:")
