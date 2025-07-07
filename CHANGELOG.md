@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.2 (2025-07-07)
+
+### Fix
+
+* Don't store default snapshot in `snapshot.snapshot` ([`f13d8d3`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/f13d8d3d98fd0244b459e4b580f1d26370754c73))
+
 ## v0.5.1 (2025-06-24)
 
 ### Fix
