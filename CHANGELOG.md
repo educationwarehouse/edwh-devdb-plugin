@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.3 (2025-07-14)
+
+### Fix
+
+* Don't crash if `migrate/data/snapshot` doesn't exist (even though other snapshots do) ([`1788d86`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/1788d86971cb3b559f0b445a45273a4626299941))
+
 ## v0.5.2 (2025-07-07)
 
 ### Fix
