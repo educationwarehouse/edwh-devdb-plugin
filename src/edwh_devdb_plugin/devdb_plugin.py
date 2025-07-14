@@ -272,28 +272,33 @@ def show_list(_: Context):
 
     Local only.
     """
-    folder = ensure_snapshots_folder(create=False)
+    folder = ensure_snapshots_folder(create=True)
     parent_folder = folder.parent
-    if snapshot_dirs := [
+
+    snapshot_dirs = [
         d for d in parent_folder.iterdir() if d.is_dir() and d.name.endswith(".snapshot") or d.name == "snapshot"
-    ]:
-        print("Snapshot:")
-        results = [
-            dict(
-                folder=d,
-                timestamp=(
-                    datetime.datetime.fromtimestamp(max(f.stat().st_ctime for f in d.glob("*")))
-                    if list(d.glob("*"))
-                    else "Empty"
-                ),
-                size=humanize.naturalsize(sum(f.stat().st_size for f in d.glob("*"))),
-            )
-            for d in snapshot_dirs
-        ]
-        results = sorted(results, key=(lambda rec: str(rec["timestamp"])), reverse=True)
-        print(tabulate.tabulate(results, headers="keys"))
-    else:
+    ]
+
+    if not snapshot_dirs:
         print("No snapshots found.")
+        return
+
+    results = [
+        dict(
+            folder=d,
+            timestamp=(
+                datetime.datetime.fromtimestamp(max(f.stat().st_ctime for f in d.glob("*")))
+                if list(d.glob("*"))
+                else "Empty"
+            ),
+            size=humanize.naturalsize(sum(f.stat().st_size for f in d.glob("*"))),
+        )
+        for d in snapshot_dirs
+    ]
+    results = sorted(results, key=lambda rec: str(rec["timestamp"]), reverse=True)
+
+    print("Snapshot:")
+    print(tabulate.tabulate(results, headers="keys"))
 
 
 @threadify()
