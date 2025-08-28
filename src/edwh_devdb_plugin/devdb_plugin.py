@@ -43,7 +43,10 @@ def ensure_snapshots_folder(name: str = "snapshot", create: bool = True) -> Path
     """
     if name != "snapshot" and not name.endswith(".snapshot"):
         name += ".snapshot"
-    snapshots_folder = Path("./migrate/data") / name
+
+    parent = Path("./migrate/data")
+    parent.mkdir(exist_ok=True, parents=True)
+    snapshots_folder = parent / name
     if create:
         snapshots_folder.mkdir(exist_ok=True)
     elif not snapshots_folder.exists():
@@ -149,10 +152,11 @@ def snapshot(
     Send this using `ew devdb.push`.
     This file leaves out the largest tables that aren't used regularly when developing ensuring quick processing.
 
-    Optional parameters:
-    - exclude (list): tables to exclude. If not selected, the `devdb.exclude` value in .toml or default.toml is used.
-    - all (boolean): ignore 'exclude', backup all tables.
-    - compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
+    Args:
+        ctx: invoke context
+        exclude (list): tables to exclude. If not selected, the `devdb.exclude` value in .toml or default.toml is used.
+        backup_all (boolean): ignore 'exclude', backup all tables.
+        compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
 
     Example:
     server$ ew devdb.snapshot
@@ -248,8 +252,8 @@ def snapshot_full(
 
 
 @task
-def rename(_: Context, name: str):
-    folder = ensure_snapshots_folder()
+def rename(_: Context, name: str, snapshot: str = "snapshot"):
+    folder = ensure_snapshots_folder(snapshot, create=False)
     if not any(folder.glob("*")):
         print("Failure: create a snapshot first")
         return
@@ -268,28 +272,33 @@ def show_list(_: Context):
 
     Local only.
     """
-    folder = ensure_snapshots_folder()
+    folder = ensure_snapshots_folder(create=True)
     parent_folder = folder.parent
-    if snapshot_dirs := [
+
+    snapshot_dirs = [
         d for d in parent_folder.iterdir() if d.is_dir() and d.name.endswith(".snapshot") or d.name == "snapshot"
-    ]:
-        print("Snapshot:")
-        results = [
-            dict(
-                folder=d,
-                timestamp=(
-                    datetime.datetime.fromtimestamp(max(f.stat().st_ctime for f in d.glob("*")))
-                    if list(d.glob("*"))
-                    else "Empty"
-                ),
-                size=humanize.naturalsize(sum(f.stat().st_size for f in d.glob("*"))),
-            )
-            for d in snapshot_dirs
-        ]
-        results = sorted(results, key=(lambda rec: str(rec["timestamp"])), reverse=True)
-        print(tabulate.tabulate(results, headers="keys"))
-    else:
+    ]
+
+    if not snapshot_dirs:
         print("No snapshots found.")
+        return
+
+    results = [
+        dict(
+            folder=d,
+            timestamp=(
+                datetime.datetime.fromtimestamp(max(f.stat().st_ctime for f in d.glob("*")))
+                if list(d.glob("*"))
+                else "Empty"
+            ),
+            size=humanize.naturalsize(sum(f.stat().st_size for f in d.glob("*"))),
+        )
+        for d in snapshot_dirs
+    ]
+    results = sorted(results, key=lambda rec: str(rec["timestamp"]), reverse=True)
+
+    print("Snapshot:")
+    print(tabulate.tabulate(results, headers="keys"))
 
 
 @threadify()
@@ -364,7 +373,7 @@ def create_terminal_link(url: str, text: str, underline: bool = True) -> str:
 
 
 @task()
-def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_level: int = 5):
+def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_level: int = 5, name: str = "snapshot"):
     """
     Pushes the local development database to a remote server.
 
@@ -377,7 +386,7 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
     Example Usage:
     #> ew devdb.push
     """
-    folder = ensure_snapshots_folder()
+    folder = ensure_snapshots_folder(name)
     if not any(folder.glob("*")):
         print("Failure: will not push an empty folder")
         return
@@ -404,21 +413,25 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
     )
 
 
-@task()
-def pop(ctx: Context, url: str, yes: bool = False):
+@task(
+    aliases=("pull",),
+)
+def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
     """
     Prepares the the development database snapshot from the given URL.
 
-    Parameters:
-    - url (str): The URL of the snapshot to download and populate the database with.
+    Args:
+        url (str): The URL of the snapshot to download and populate the database with.
                  You get this url after a succesful `ew devdb.push`.
+        yes: don't ask permission to overwrite existing
+        name: store as a specific name instead of 'snapshot'
 
     Run `ew help devdb.snapshot` for more info.
 
     Example Usage:
     #> ew devdb.pop https://example.com/snapshot.zip
     """
-    folder = ensure_snapshots_folder()
+    folder = ensure_snapshots_folder(name)
     if any(folder.glob("*")):
         if yes or edwh.confirm("A snapshot already exists. Overwrite? [Yn]", default=True):
             print(f"Flushing {folder}")
@@ -429,7 +442,14 @@ def pop(ctx: Context, url: str, yes: bool = False):
             return
 
     with chdir(folder.parent):
-        files_plugin.download(ctx, url, unpack=True)
+        ext = url.split(".")[-1]
+
+        if folder.name == "snapshot":
+            tmp_file = Path(folder.name).with_suffix(f".{ext}")
+        else:
+            tmp_file = Path(folder.name).with_suffix(f".snapshot.{ext}")
+
+        files_plugin.download(ctx, url, output_file=tmp_file, unpack=True)
 
     print("recover using:")
     cprint("$ edwh devdb.reset", color="blue")
