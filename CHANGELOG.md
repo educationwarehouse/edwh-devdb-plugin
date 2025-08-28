@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.4 (2025-08-28)
+
+### Fix
+
+* Odoo instead of nextcloud ([`b2156e9`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/b2156e93bdaddcefba86fb28285558c1becd16bf))
+
 ## v0.5.3 (2025-07-14)
 
 ### Fix
