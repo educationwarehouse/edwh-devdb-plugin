@@ -27,7 +27,7 @@ from threadful import ThreadWithReturn, animate, threadify
 
 # url shortening via c.meteddie because the Collectives URL is not recognized as a valid url by the terminal,
 # so that's annoying to click
-COLLECTIVES_URL = "https://c.meteddie.nl/c/nextcloud/sqZlx4CNRHySxDQwKYFY0w/8336de2ff453a35a3a8d"
+COLLECTIVES_URL = "https://c.meteddie.nl/c/odoo/sqZlx4CNRHySxDQwKYFY0w/8336de2ff453a35a3a8d"
 
 MINIMAL_REQUIRED_EDWH_FILES_VERSION = "1.1.0"
 
@@ -347,6 +347,22 @@ def recover(ctx: Context, name: str = "snapshot"):
         print("Should be fine!")
 
 
+def create_terminal_link(url: str, text: str, underline: bool = True) -> str:
+    """
+    Create a clickable terminal hyperlink using ANSI escape sequences
+
+    Args:
+        url: The URL to link to
+        text: The display text
+
+    Returns:
+        Formatted string with terminal hyperlink
+    """
+    # ANSI escape sequence for hyperlinks: \033]8;;URL\033\\TEXT\033]8;;\033\\
+    # Use \x1b instead of \033 for better compatibility
+    return f"\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\"
+
+
 @task()
 def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_level: int = 5):
     """
@@ -382,7 +398,10 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
     print("\nDelete using:")
     cprint(f"$ edwh file.delete {delete_url}", color="blue")
 
-    print(f"\nVergeet niet om de URL ook bij te werken op collectives: {COLLECTIVES_URL}")
+    print(
+        f"\nVergeet niet om de URL ook bij te werken het overzicht:",
+        create_terminal_link(COLLECTIVES_URL, "🔗 Odoo > Kennis > Teddies > Database recover URLs"),
+    )
 
 
 @task()
