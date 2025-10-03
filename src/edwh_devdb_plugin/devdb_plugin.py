@@ -402,7 +402,12 @@ def recover(ctx: Context, name: str = "snapshot"):
             warn=True,
         )
 
-        input('⏳️ Enter to continue.')
+        print("Running ANALYZE to update database statistics...")
+        analyze_cmd = (f"{DOCKER_COMPOSE} run -T --rm --no-deps migrate "
+                       f"psql -d \"{postgres_uri}\" -c \"ANALYZE VERBOSE;\"")
+        analyze_result = ctx.run(analyze_cmd, hide=True, warn=True)
+        if not analyze_result.ok:
+            cprint(f"Database ANALYZE failed. Stderr:\n{analyze_result.stderr}", color="yellow")
 
         if not (no_mat_result and no_mat_result.ok):
             cprint("Error restoring non-materialized views.", color="red")
