@@ -6,6 +6,7 @@ import contextlib
 import datetime
 import multiprocessing
 import shutil
+import tempfile
 import textwrap
 import typing as t
 from contextlib import chdir
@@ -309,7 +310,7 @@ def run_in_background_with_animation(ctx: Context, command: str, **kwargs: t.Any
     return animate(promise, text=textwrap.shorten(command, 100))
 
 
-@task()
+@task(aliases=['restore'])
 def recover(ctx: Context, name: str = "snapshot"):
     """
     Recovers the development database from a previously created (popped) snapshot.
@@ -326,29 +327,111 @@ def recover(ctx: Context, name: str = "snapshot"):
         return
     print("recovering...")
     postgres_uri = edwh.get_env_value("INSIDE_DOCKER_POSTGRES_URI")
-    cmd = (
-        f"{DOCKER_COMPOSE} run -T --rm --no-deps migrate "  # run within this container, remote docker residue
-        "pg_restore "
-        "--no-owner "  # anders verkeerde schema
-        "--no-acl "  # schijnbaar ook nodig.
-        f"-j {multiprocessing.cpu_count() - 1} "  # threads
-        f'-d "{postgres_uri}" '  # target database
-        f"/data/{folder.name}"
-    )  # in this folder
+    # Ensure at least 1 thread if cpu_count is 1
+    threads = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
+    snapshot_path_in_container = f"/data/{folder.name}"
 
-    result = run_in_background_with_animation(
-        ctx,
-        cmd,
-        warn=True,
+    with tempfile.TemporaryDirectory() as temp_dir_host:
+        # Define paths for temporary list files. These will be on the host machine.
+        temp_dir_container = "/tmp/restore_lists" # Consistent path inside container for mounting
+        database_objects_lst = Path(temp_dir_host) / "database_objects.lst"
+        no_mat_views_lst = Path(temp_dir_host) / "no_mat_views.lst"
+        mat_views_lst = Path(temp_dir_host) / "mat_views.lst"
+
+        # Step 1: List database objects from the snapshot
+        print(f"[{__file__}] Listing database objects to '{database_objects_lst}'...")
+        list_cmd = (
+            f"{DOCKER_COMPOSE} run -T --rm --no-deps migrate "
+            f"pg_restore -l -Fd {snapshot_path_in_container}"
+        )
+        # Execute the command and capture its stdout to a local file
+        list_result = ctx.run(list_cmd, hide=True, warn=True)
+
+        if not list_result.ok:
+            cprint(f"Error listing database objects:\n{list_result.stderr}", color="red")
+            return
+
+        with open(database_objects_lst, "w") as f:
+            f.write(list_result.stdout)
+        print(f"[{__file__}] Database objects listed successfully.")
+
+        # Step 2 & 3: Filter list files locally based on materialized views
+        print(f"[{__file__}] Filtering materialized view data...")
+        mat_view_found = False
+        with open(database_objects_lst, "r") as infile, \
+             open(no_mat_views_lst, "w") as no_mat_file, \
+             open(mat_views_lst, "w") as mat_file:
+            for line in infile:
+                if "MATERIALIZED VIEW DATA" in line:
+                    mat_file.write(line)
+                    mat_view_found = True
+                else:
+                    no_mat_file.write(line)
+        print(f"[{__file__}] Materialized view data filtered.")
+
+        # Prepare base restore command.
+        # The temporary directory on the host is mounted into the container
+        # so the list files can be accessed by pg_restore inside the container.
+        base_restore_cmd = (
+            f"{DOCKER_COMPOSE} run -T --rm --no-deps "
+            f"-v {temp_dir_host}:{temp_dir_container} " # Mount temporary directory
+            "migrate pg_restore "
+            "--no-owner --no-acl "
+            f"-j {threads} "
+            f"-Fd {snapshot_path_in_container} "
+            f'-d "{postgres_uri}" '
+        )
+
+        # Step 4: Restore non-materialized views first
+        print(f"[{__file__}] Restoring non-materialized views using '{no_mat_views_lst.name}'...")
+        no_mat_views_restore_cmd = f"{base_restore_cmd} -L {temp_dir_container}/{no_mat_views_lst.name}"
+        no_mat_result = run_in_background_with_animation(
+            ctx,
+            no_mat_views_restore_cmd,
+            warn=True,
+        )
+
+        if not (no_mat_result and no_mat_result.ok):
+            cprint("Error restoring non-materialized views.", color="red")
+            print("In case of a lot of errors:")
+            cprint("$ edwh wipe-db up -s pgpool", color="blue")
+            print("In case of a connection error, pgpool is probably still rebuilding after your wipe-db")
+            return
+
+        # Step 5: Restore materialized views (only if any were found)
+        if mat_view_found:
+            print(f"[{__file__}] Restoring materialized views using '{mat_views_lst.name}'...")
+            mat_views_restore_cmd = f"{base_restore_cmd} -L {temp_dir_container}/{mat_views_lst.name}"
+            mat_result = run_in_background_with_animation(
+                ctx,
+                mat_views_restore_cmd,
+                warn=True,
+                animation_text="Restoring materialized views",
+            )
+
+            if not (mat_result and mat_result.ok):
+                cprint("Error restoring materialized views.", color="red")
+                print("In case of a lot of errors:")
+                cprint("$ edwh wipe-db up -s pgpool", color="blue")
+                print("In case of a connection error, pgpool is probably still rebuilding after your wipe-db")
+                return
+        else:
+            print(f"[{__file__}] No materialized views found to restore. Skipping this step.")
+
+    # Validation: Connect to the restored database and run a simple query
+    print(f"[{__file__}] Validating database connection...")
+    validation_cmd = (
+        f"{DOCKER_COMPOSE} run -T --rm --no-deps migrate "
+        f"psql -d \"{postgres_uri}\" -c \"SELECT 1;\""
     )
-    print(f"Ran: `{cmd}`")
+    validation_result = ctx.run(validation_cmd, hide=True, warn=True)
 
-    if not (result and result.ok):
-        print("In case of a lot of errors:")
-        cprint("$ edwh wipe-db up -s pgpool", color="blue")
-        print("In case of a connection error, pgpool is probably still rebuilding after your wipe-db")
+    if not validation_result.ok:
+        cprint(f"Database validation failed. Stderr:\n{validation_result.stderr}", color="red")
+        print("Restoration completed but validation query failed.")
     else:
-        print("Should be fine!")
+        print(f"[{__file__}] Database connection validated successfully.")
+        print("Should be fine! Database recovery completed.")
 
 
 def create_terminal_link(url: str, text: str, underline: bool = True) -> str:
