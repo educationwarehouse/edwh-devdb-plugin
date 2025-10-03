@@ -105,11 +105,6 @@ def setup(c: Context):
     )
 
 
-"""
-Todo:
-- don't harcode tables to exclude
-- load from `default.toml` or `.toml` (c
-"""
 
 
 def find_devdb_config():
