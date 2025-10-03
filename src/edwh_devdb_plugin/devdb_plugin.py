@@ -5,6 +5,8 @@ Local namespace: `edwh help devdb`
 import contextlib
 import datetime
 import multiprocessing
+import os
+import pathlib
 import shutil
 import tempfile
 import textwrap
@@ -187,7 +189,7 @@ def snapshot(
     ctx.sudo(f"rm -rf {snapshots_folder}")
     ctx.sudo(f"mkdir -p {snapshots_folder}")
     ctx.sudo(f"chown -R 1050:1050 {snapshots_folder}")
-    ctx.sudo(f"chmod -R 770 {snapshots_folder}")
+    ctx.sudo(f"chmod -R 774 {snapshots_folder}")
 
     exclude = [] if backup_all else find_tables_to_exclude(exclude)
 
@@ -326,39 +328,44 @@ def recover(ctx: Context, name: str = "snapshot"):
         print("Failure: create a snapshot first")
         return
     print("recovering...")
-    postgres_uri = edwh.get_env_value("INSIDE_DOCKER_POSTGRES_URI")
+    postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
     # Ensure at least 1 thread if cpu_count is 1
     threads = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
     snapshot_path_in_container = f"/data/{folder.name}"
 
-    with tempfile.TemporaryDirectory() as temp_dir_host:
+    with tempfile.TemporaryDirectory(dir='./migrate/data/') as temp_dir_host:
+        host_path = Path(temp_dir_host)
+        host_path.chmod(0o777)
         # Define paths for temporary list files. These will be on the host machine.
-        temp_dir_container = "/tmp/restore_lists" # Consistent path inside container for mounting
-        database_objects_lst = Path(temp_dir_host) / "database_objects.lst"
-        no_mat_views_lst = Path(temp_dir_host) / "no_mat_views.lst"
-        mat_views_lst = Path(temp_dir_host) / "mat_views.lst"
+        temp_dir_container = f"/data/{host_path.name}"
+        database_objects_lst = host_path / "database_objects.lst"
+        no_mat_views_lst = host_path / "no_mat_views.lst"
+        mat_views_lst = host_path / "mat_views.lst"
+        for p in (database_objects_lst, no_mat_views_lst, mat_views_lst):
+            p.touch()
+            p.chmod(0o666)
+            os.system(f'ls -al {p}')
 
         # Step 1: List database objects from the snapshot
         print(f"[{__file__}] Listing database objects to '{database_objects_lst}'...")
         list_cmd = (
-            f"{DOCKER_COMPOSE} run -T --rm --no-deps migrate "
+            f"{DOCKER_COMPOSE} run -T --rm  migrate "
             f"pg_restore -l -Fd {snapshot_path_in_container}"
         )
         # Execute the command and capture its stdout to a local file
         list_result = ctx.run(list_cmd, hide=True, warn=True)
-
         if not list_result.ok:
             cprint(f"Error listing database objects:\n{list_result.stderr}", color="red")
             return
 
-        with open(database_objects_lst, "w") as f:
-            f.write(list_result.stdout)
-        print(f"[{__file__}] Database objects listed successfully.")
+
+        database_objects_lst.write_text(list_result.stdout)
+
 
         # Step 2 & 3: Filter list files locally based on materialized views
         print(f"[{__file__}] Filtering materialized view data...")
         mat_view_found = False
-        with open(database_objects_lst, "r") as infile, \
+        with database_objects_lst.open('r') as infile, \
              open(no_mat_views_lst, "w") as no_mat_file, \
              open(mat_views_lst, "w") as mat_file:
             for line in infile:
@@ -368,13 +375,16 @@ def recover(ctx: Context, name: str = "snapshot"):
                 else:
                     no_mat_file.write(line)
         print(f"[{__file__}] Materialized view data filtered.")
+        
+        
+        ctx.run(f'ls -al  {host_path}')
+
 
         # Prepare base restore command.
         # The temporary directory on the host is mounted into the container
         # so the list files can be accessed by pg_restore inside the container.
         base_restore_cmd = (
             f"{DOCKER_COMPOSE} run -T --rm --no-deps "
-            f"-v {temp_dir_host}:{temp_dir_container} " # Mount temporary directory
             "migrate pg_restore "
             "--no-owner --no-acl "
             f"-j {threads} "
@@ -384,12 +394,15 @@ def recover(ctx: Context, name: str = "snapshot"):
 
         # Step 4: Restore non-materialized views first
         print(f"[{__file__}] Restoring non-materialized views using '{no_mat_views_lst.name}'...")
+
         no_mat_views_restore_cmd = f"{base_restore_cmd} -L {temp_dir_container}/{no_mat_views_lst.name}"
         no_mat_result = run_in_background_with_animation(
             ctx,
             no_mat_views_restore_cmd,
             warn=True,
         )
+
+        input('⏳️ Enter to continue.')
 
         if not (no_mat_result and no_mat_result.ok):
             cprint("Error restoring non-materialized views.", color="red")
@@ -406,7 +419,6 @@ def recover(ctx: Context, name: str = "snapshot"):
                 ctx,
                 mat_views_restore_cmd,
                 warn=True,
-                animation_text="Restoring materialized views",
             )
 
             if not (mat_result and mat_result.ok):
