@@ -2,6 +2,16 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.0 (2025-10-06)
+
+### Feature
+
+* Improve `recover` task with performance updates by running ANALYSE before recovering materialized views ([#2](https://github.com/educationwarehouse/edwh-devdb-plugin/issues/2)) ([`f416c1b`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/f416c1be2b0a16fd0f27b1ac4af10fce9ea239a4))
+
+### Documentation
+
+* Remove outdated TODO comment in devdb_plugin.py ([`367b864`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/367b86452ff50c10d85ed39c0f849637058fffff))
+
 ## v0.5.4 (2025-08-28)
 
 ### Fix
