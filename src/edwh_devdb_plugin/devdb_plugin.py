@@ -356,22 +356,18 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
             return
 
         # Step 2 & 3: Filter list files locally based on materialized views
-        print(f"Filtering materialized view data...")
         mat_view_found = False
         with (
             no_mat_views_lst.open("w") as no_mat_file,
             mat_views_lst.open("w") as mat_file,
         ):
             for line in list_result.stdout.split("\n"):
-                print(line, "MATERIALIZED VIEW DATA" in line)
                 line += "\n"  # sad
                 if "MATERIALIZED VIEW DATA" in line:
                     mat_file.write(line)
                     mat_view_found = True
                 else:
                     no_mat_file.write(line)
-
-        print(f"Materialized view data filtered.")
 
         # Prepare base restore command.
         # The temporary directory on the host is mounted into the container
