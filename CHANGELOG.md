@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.1 (2025-10-07)
+
+### Fix
+
+* Remove debug prints ([`eae1ec7`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/eae1ec730fc18b935c8bc21b59000ebcf8d1a20c))
+
 ## v0.6.0 (2025-10-06)
 
 ### Feature
