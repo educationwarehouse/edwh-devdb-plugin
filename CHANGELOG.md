@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.2 (2025-10-20)
+
+### Fix
+
+* If result.ok, re-set 774 permissions to snapshot folder ([`0b5326f`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/0b5326f2bde70201b20c24e63ee0adefa3cc692c))
+
 ## v0.6.1 (2025-10-07)
 
 ### Fix
