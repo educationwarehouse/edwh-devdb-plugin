@@ -223,6 +223,8 @@ def snapshot(
         print("if so: try restarting the pg-services: ")
         cprint('$ ew stop -s "pg*" up -s pgpool', color="blue")
     else:
+        ctx.sudo(f"chmod -R 774 {snapshots_folder}")
+
         total_size = sum(f.stat().st_size for f in snapshots_folder.glob("*"))
 
         print(f"Done, saved {humanize.naturalsize(total_size)} in a snapshot.")
