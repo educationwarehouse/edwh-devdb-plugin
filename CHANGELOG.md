@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.3 (2025-11-14)
+
+### Fix
+
+* Don't create empty 'snapshot folder', check if snapshot is non-empty before resetting/recovering ([`3ee4b08`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/3ee4b08ddbf509ccc66f10a7d2d948be70112f4f))
+
 ## v0.6.2 (2025-10-20)
 
 ### Fix
