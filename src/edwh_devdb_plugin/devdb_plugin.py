@@ -34,14 +34,24 @@ COLLECTIVES_URL = "https://c.meteddie.nl/c/odoo/sqZlx4CNRHySxDQwKYFY0w/8336de2ff
 MINIMAL_REQUIRED_EDWH_FILES_VERSION = "1.1.0"
 
 
-def ensure_snapshots_folder(name: str = "snapshot", create: bool = True) -> Path:
+def ensure_snapshots_folder(
+    name: str = "snapshot",
+    create: bool = True,
+    check: t.Literal["exists", "nonempty"] | None = "exists",
+) -> Path:
     """
     Ensure that the snapshots folder exists.
 
-    If the snapshots folder does not exist, it will be created at the specified path "./migrate/data/snapshot".
-    The folder's permissions will be set to 0x777.
+    If the snapshots folder does not exist, it will be created at the specified path "./migrate/data/snapshot"
+    when create=True. The folder's permissions will be set to 0x777 (depending on OS defaults).
 
-    :return: None
+    :param name: Name of the snapshot folder (".snapshot" suffix will be added if missing, unless name is "snapshot").
+    :param create: Whether to create the folder if it does not exist.
+    :param check:
+        - "none": do not perform any existence or content checks
+        - "exists": ensure the folder exists
+        - "nonempty": ensure the folder exists and is non-empty
+    :return: Path to the snapshots folder.
     """
     if name != "snapshot" and not name.endswith(".snapshot"):
         name += ".snapshot"
@@ -49,11 +59,20 @@ def ensure_snapshots_folder(name: str = "snapshot", create: bool = True) -> Path
     parent = Path("./migrate/data")
     parent.mkdir(exist_ok=True, parents=True)
     snapshots_folder = parent / name
+
     if create:
         snapshots_folder.mkdir(exist_ok=True)
-    elif not snapshots_folder.exists():
-        print(f"Error: snapshot '{name}' not found.")
-        exit(1)
+
+    if check:
+        if not snapshots_folder.exists():
+            print(f"Error: snapshot folder '{name}' not found.")
+            exit(1)
+
+        if check == "nonempty":
+            # Check that the directory has at least one entry
+            if not any(snapshots_folder.iterdir()):
+                print(f"Error: snapshot folder '{name}' is empty.")
+                exit(1)
 
     return snapshots_folder
 
@@ -269,7 +288,7 @@ def show_list(_: Context):
 
     Local only.
     """
-    folder = ensure_snapshots_folder(create=True)
+    folder = ensure_snapshots_folder(create=False, check=None)
     parent_folder = folder.parent
 
     snapshot_dirs = [
@@ -322,7 +341,7 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
     Example Usage:
     #> ew devdb.recover
     """
-    folder = ensure_snapshots_folder(name)
+    folder = ensure_snapshots_folder(name, check="nonempty")
     if not any(folder.glob("*")):
         print("Failure: create a snapshot first")
         return
@@ -567,8 +586,7 @@ def reset(
     if with_pop:
         pop(ctx, with_pop, yes=yes)
 
-    if name:
-        ensure_snapshots_folder(name, create=False)
+    ensure_snapshots_folder(name, create=False, check="nonempty")
 
     edwh.tasks.stop(ctx)
     edwh.tasks.wipe_db(ctx, yes=yes)
