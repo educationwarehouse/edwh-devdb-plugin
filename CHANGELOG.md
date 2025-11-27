@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.0 (2025-11-27)
+
+### Feature
+
+* Allow `--include` for devdb.snapshot to only include specific ones (instead of having to `--exclude` a lot) ([`7264eb1`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/7264eb1b5ec05ac597be66bfe08c204cff8a4f28))
+
 ## v0.6.3 (2025-11-14)
 
 ### Fix
