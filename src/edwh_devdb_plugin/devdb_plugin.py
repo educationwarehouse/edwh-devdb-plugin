@@ -146,8 +146,9 @@ def find_tables_to_exclude(
 @task(
     help=dict(
         exclude="Tables to exclude (otherwise loaded from devdb.exclude in .toml)",
+        include="Tables to include (defaults to all)",
     ),
-    iterable=("exclude",),
+    iterable=("exclude", "include"),
     flags={
         "backup_all": ("all", "a"),
     },
@@ -156,6 +157,7 @@ def find_tables_to_exclude(
 def snapshot(
     ctx: Context,
     exclude: list[str],
+    include: list[str],
     backup_all: bool = False,
     compress: bool = False,
     name: str = "snapshot",
@@ -169,6 +171,7 @@ def snapshot(
     Args:
         ctx: invoke context
         exclude (list): tables to exclude. If not selected, the `devdb.exclude` value in .toml or default.toml is used.
+        include (list): only include specific tables
         backup_all (boolean): ignore 'exclude', backup all tables.
         compress (bool): use lz4 compression? Only supported on Postgres 16 and higher.
 
@@ -207,9 +210,14 @@ def snapshot(
     ctx.sudo(f"chown -R 1050:1050 {snapshots_folder}")
     ctx.sudo(f"chmod -R 774 {snapshots_folder}")
 
-    exclude = [] if backup_all else find_tables_to_exclude(exclude)
+    if include and exclude:
+        cprint("Conflicting options 'include' and 'exclude'")
+        exit(1)
 
-    excludes = "".join([f" --exclude-table-data={table} " for table in exclude])
+    exclude = [] if backup_all else find_tables_to_exclude(exclude)
+    excludes = "".join((f" --exclude-table-data={table} " for table in exclude))
+
+    includes = "".join((f" --table={table} " for table in include))
 
     postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
 
@@ -222,7 +230,7 @@ def snapshot(
         "-F d "  # directory format
         f"-j {multiprocessing.cpu_count() - 1} "  # threads
         f"{compress_arg} "
-        f"{excludes}"
+        f"{includes or excludes}"
         f"-f /data/{snapshots_folder.name} "  # in the ./migrate/data folder mounted as /data
         f'"{postgres_uri}"'
     )
