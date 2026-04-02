@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.2 (2026-04-02)
+
+### Fix
+
+* Require_sudo for reset (-> for `setup`) ([`a92b6d4`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/a92b6d401e2341dc41510ca2b3f2d19adc16d626))
+
 ## v0.7.1 (2026-04-02)
 
 
