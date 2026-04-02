@@ -607,6 +607,8 @@ def reset(
     )
 
     recover(ctx, name, verbose=verbose)
+
+    edwh.tasks.setup(ctx)
     edwh.tasks.migrate(ctx)
 
     if not skip_up:
