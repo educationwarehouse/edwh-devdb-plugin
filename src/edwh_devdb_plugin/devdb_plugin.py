@@ -566,7 +566,7 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
     cprint("$ edwh devdb.reset", color="blue")
 
 
-@task(flags={"with_pop": ("pop", "p")})
+@task(flags={"with_pop": ("pop", "p")}, pre=[edwh.tasks.require_sudo])
 def reset(
     ctx: Context,
     yes: bool = False,
