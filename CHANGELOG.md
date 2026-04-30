@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.3 (2026-04-30)
+
+### Fix
+
+* Stop restore after first error so you don't see cascading errors, only the root one ([`4540250`](https://github.com/educationwarehouse/edwh-devdb-plugin/commit/45402500595bfa0c5701600b330a0ac3ec0609fd))
+
 ## v0.7.2 (2026-04-02)
 
 ### Fix
