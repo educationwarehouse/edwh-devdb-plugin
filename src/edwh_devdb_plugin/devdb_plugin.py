@@ -404,6 +404,7 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
         base_restore_cmd = (
             f"{DOCKER_COMPOSE} run -T --rm --no-deps "
             "migrate pg_restore "
+            "--exit-on-error "
             "--no-owner --no-acl "
             f"-j {threads} "
             f"-Fd {snapshot_path_in_container} "
