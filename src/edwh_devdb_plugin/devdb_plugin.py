@@ -271,6 +271,7 @@ def snapshot_full(
     return snapshot(
         ctx,
         exclude=[],
+        include=[],
         backup_all=True,
     )
 
