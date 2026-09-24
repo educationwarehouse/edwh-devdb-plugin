@@ -5,17 +5,16 @@ Local namespace: `edwh help devdb`
 import contextlib
 import datetime
 import multiprocessing
-import os
 import shutil
 import tempfile
 import textwrap
 import typing as t
+import warnings
 from contextlib import chdir
 from pathlib import Path
 
 import edwh
 import humanize
-import invoke
 import tabulate
 import tomlkit
 from edwh import DOCKER_COMPOSE
@@ -23,7 +22,8 @@ from edwh import improved_task as task
 from edwh.constants import DEFAULT_TOML_NAME, FALLBACK_TOML_NAME, LEGACY_TOML_NAME
 from edwh_files_plugin import files_plugin
 from edwh_files_plugin.files_plugin import CliCompressionTypes
-from invoke import Context
+from ewok import Context
+from fabric import Result
 from termcolor import cprint
 from threadful import ThreadWithReturn, animate, threadify
 
@@ -68,11 +68,10 @@ def ensure_snapshots_folder(
             print(f"Error: snapshot folder '{name}' not found.")
             exit(1)
 
-        if check == "nonempty":
-            # Check that the directory has at least one entry
-            if not any(snapshots_folder.iterdir()):
-                print(f"Error: snapshot folder '{name}' is empty.")
-                exit(1)
+        # Check that the directory has at least one entry
+        if check == "nonempty" and not any(snapshots_folder.iterdir()):
+            print(f"Error: snapshot folder '{name}' is empty.")
+            exit(1)
 
     return snapshots_folder
 
@@ -95,7 +94,7 @@ def setup(c: Context):
     )
     pgpool_port = edwh.check_env(
         key="PGPOOL_PORT",
-        default=edwh.tasks.next_value(c, "PGPOOL_PORT", 5432),
+        default=str(edwh.tasks.next_value(c, "PGPOOL_PORT", 5432)),
         comment="Port to host pgpool on. Avoid collisions when using multiple projects, auto-discovered default",
         force_default=use_default,
     )
@@ -138,7 +137,7 @@ def find_devdb_config():
 
 
 def find_tables_to_exclude(
-    exclude: list[str] = (),
+    exclude: list[str] | tuple[str, ...] = (),
 ):
     return exclude or find_devdb_config().get("exclude") or []
 
@@ -301,7 +300,7 @@ def show_list(_: Context):
     parent_folder = folder.parent
 
     snapshot_dirs = [
-        d for d in parent_folder.iterdir() if d.is_dir() and d.name.endswith(".snapshot") or d.name == "snapshot"
+        d for d in parent_folder.iterdir() if (d.is_dir() and d.name.endswith(".snapshot")) or d.name == "snapshot"
     ]
 
     if not snapshot_dirs:
@@ -327,7 +326,7 @@ def show_list(_: Context):
 
 
 @threadify()
-def run_in_background(ctx: Context, command: str, **kwargs: t.Any) -> ThreadWithReturn[invoke.Result]:
+def run_in_background(ctx: Context, command: str, **kwargs: t.Any) -> ThreadWithReturn[Result]:
     return ctx.run(
         command,
         **kwargs,
@@ -373,7 +372,7 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
             p.chmod(0o666)
 
         # Step 1: List database objects from the snapshot
-        print(f"Listing database objects ...")
+        print("Listing database objects ...")
         # Execute the command and capture its stdout to a local file
         list_result = run_in_background_with_animation(
             ctx,
@@ -455,7 +454,7 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
                 print("In case of a connection error, database is probably still rebuilding after your wipe-db")
                 return
         else:
-            print(f"No materialized views found to restore. Skipping this step.")
+            print("No materialized views found to restore. Skipping this step.")
 
     # Validation: Connect to the restored database and run a simple query
     validation_cmd = f'{DOCKER_COMPOSE} run -T --rm --no-deps migrate psql -d "{postgres_uri}" -c "SELECT 1;"'
@@ -465,21 +464,28 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
         cprint(f"Database validation failed. Stderr:\n{validation_result.stderr}", color="red")
         print("Restoration completed but validation query failed.")
     else:
-        print(f"Database connection validated successfully.")
+        print("Database connection validated successfully.")
         print("Should be fine! Database recovery completed.")
 
 
-def create_terminal_link(url: str, text: str, underline: bool = True) -> str:
+underline_unset = object()
+
+
+def create_terminal_link(url: str, text: str, underline: t.Any = underline_unset) -> str:
     """
     Create a clickable terminal hyperlink using ANSI escape sequences
 
     Args:
         url: The URL to link to
         text: The display text
+        underline: deprecated
 
     Returns:
         Formatted string with terminal hyperlink
     """
+    if underline is not underline_unset:
+        warnings.warn("the underline argument of create_terminal_link is deprecated", category=DeprecationWarning)
+
     # ANSI escape sequence for hyperlinks: \033]8;;URL\033\\TEXT\033]8;;\033\\
     # Use \x1b instead of \033 for better compatibility
     return f"\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\"
@@ -521,7 +527,7 @@ def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_le
     cprint(f"$ edwh file.delete {delete_url}", color="blue")
 
     print(
-        f"\nVergeet niet om de URL ook bij te werken het overzicht:",
+        "\nVergeet niet om de URL ook bij te werken het overzicht:",
         create_terminal_link(COLLECTIVES_URL, "🔗 Odoo > Kennis > Teddies > Database recover URLs"),
     )
 
