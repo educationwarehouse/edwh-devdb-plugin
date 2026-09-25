@@ -6,3 +6,4 @@ build/
 .env
 .toml
 migrate/data
+uv.lock

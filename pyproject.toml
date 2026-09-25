@@ -30,7 +30,11 @@ version = "0.7.4"
 
 [project.optional-dependencies]
 dev = [
-    "hatch",
+    "coverage[toml]>=6.5",
+    "pytest",
+    "black>=23.1.0",
+    "mypy>=1.0.0",
+    "ruff>=0.0.243",
 ]
 
 [project.urls]
@@ -73,15 +77,15 @@ break = "Breaking Change{s}"
 docs = "Documentation"
 perf = "Performance"
 
-[tool.vommit.pypi]
-enabled = true
-use_keyring = true
-
 [tool.vommit.commands]
 clean = "rm -rf ./dist"
 build = "uv build"
 publish = "uv publish"
 post_publish = ""
+
+[tool.vommit.pypi]
+enabled = true
+use_keyring = true
 
 [tool.vommit.version_bump_map]
 break = "major"
@@ -91,49 +95,6 @@ feat = "minor"
 fix = "patch"
 perf = "patch"
 refactor = "patch"
-
-[tool.hatch.envs.default]
-dependencies = [
-    "coverage[toml]>=6.5",
-    "pytest",
-]
-[tool.hatch.envs.default.scripts]
-test = "pytest {args:tests}"
-test-cov = "coverage run -m pytest {args:tests}"
-cov-report = [
-    "- coverage combine",
-    "coverage report",
-]
-cov = [
-    "test-cov",
-    "cov-report",
-]
-
-[[tool.hatch.envs.all.matrix]]
-python = ["3.10", "3.11", "3.12"]
-
-[tool.hatch.envs.lint]
-detached = true
-dependencies = [
-    "black>=23.1.0",
-    "mypy>=1.0.0",
-    "ruff>=0.0.243",
-]
-[tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive {args:src/edwh_devdb_plugin tests}"
-style = [
-    "ruff {args:.}",
-    "black --check --diff {args:.}",
-]
-fmt = [
-    "black {args:.}",
-    "ruff --fix {args:.}",
-    "style",
-]
-all = [
-    "style",
-    "typing",
-]
 
 [tool.black]
 target-version = ["py311"]
