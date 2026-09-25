@@ -26,7 +26,7 @@ dependencies = [
     "edwh >= 0.56.0",
     "edwh-files-plugin",
 ]
-version = "0.7.3"
+version = "0.7.4"
 
 [project.optional-dependencies]
 dev = [
@@ -77,15 +77,15 @@ break = "Breaking Change{s}"
 docs = "Documentation"
 perf = "Performance"
 
-[tool.vommit.pypi]
-enabled = true
-use_keyring = true
-
 [tool.vommit.commands]
 clean = "rm -rf ./dist"
 build = "uv build"
 publish = "uv publish"
 post_publish = ""
+
+[tool.vommit.pypi]
+enabled = true
+use_keyring = true
 
 [tool.vommit.version_bump_map]
 break = "major"
