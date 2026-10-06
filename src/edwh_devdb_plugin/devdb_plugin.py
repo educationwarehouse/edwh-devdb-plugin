@@ -22,6 +22,7 @@ from edwh import improved_task as task
 from edwh.constants import DEFAULT_TOML_NAME, FALLBACK_TOML_NAME, LEGACY_TOML_NAME
 from edwh_files_plugin import files_plugin
 from edwh_files_plugin.files_plugin import CliCompressionTypes
+from edwh_gokapi_plugin import gokapi_plugin
 from ewok import Context
 from fabric import Result
 from termcolor import cprint
@@ -492,39 +493,58 @@ def create_terminal_link(url: str, text: str, underline: t.Any = underline_unset
 
 
 @task()
-def push(_: Context, compression: "CliCompressionTypes" = "auto", compression_level: int = 5, name: str = "snapshot"):
+def push(
+    _: Context,
+    compression: "CliCompressionTypes" = "auto",
+    compression_level: int = 5,
+    name: str = "snapshot",
+    backend: str = "gokapi",
+):
     """
     Pushes the local development database to a remote server.
 
     Args:
         compression: which compression type to use ("auto", "gzip", "zip", "none")
         compression_level: The compression level is a measure of the compression quality (file size; int 0 - 9).
+        backend: Upload via "gokapi" (default), "files" or "transfersh".
 
     Run `ew help devdb.snapshot` for more info.
 
     Example Usage:
     #> ew devdb.push
     """
+    if backend not in ("gokapi", "files", "transfersh"):
+        raise ValueError(f"Unknown upload backend: {backend!r}. Choose gokapi, files or transfersh.")
+
     folder = ensure_snapshots_folder(name)
     if not any(folder.glob("*")):
         print("Failure: will not push an empty folder")
         return
 
-    response = files_plugin.upload_directory(
-        files_plugin.DEFAULT_TRANSFERSH_SERVER,
-        filepath=folder,
-        compression=compression,
-        compression_level=compression_level,
-    )
-
-    download_url = response.text.strip()
-    delete_url = response.headers.get("x-url-delete")
+    if backend == "gokapi":
+        result = gokapi_plugin.transfer_upload(
+            folder,
+            max_downloads=0,  # Shared database snapshots must support repeated downloads.
+            compression=compression,
+            compression_level=compression_level,
+        )
+        download_url = result["url"]
+        delete_command = result["delete_command"]
+    else:
+        response = files_plugin.upload_directory(
+            files_plugin.DEFAULT_TRANSFERSH_SERVER,
+            filepath=folder,
+            compression=compression,
+            compression_level=compression_level,
+        )
+        download_url = response.text.strip()
+        delete_command = f"edwh file.delete {response.headers.get('x-url-delete')}"
     print("\ndownload using:")
     cprint(f"$ edwh devdb.pop {download_url}", color="blue")
     print("\ndownload and immediately use using:")
     cprint(f"$ edwh devdb.reset --pop {download_url}", color="blue")
     print("\nDelete using:")
-    cprint(f"$ edwh file.delete {delete_url}", color="blue")
+    cprint(f"$ {delete_command}", color="blue")
 
     print(
         "\nVergeet niet om de URL ook bij te werken het overzicht:",
@@ -540,8 +560,8 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
     Prepares the the development database snapshot from the given URL.
 
     Args:
-        url (str): The URL of the snapshot to download and populate the database with.
-                 You get this url after a succesful `ew devdb.push`.
+        url (str): Gokapi or files/transfersh snapshot URL; the backend is detected automatically.
+                 You get this url after a successful `ew devdb.push`.
         yes: don't ask permission to overwrite existing
         name: store as a specific name instead of 'snapshot'
 
@@ -550,6 +570,13 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
     Example Usage:
     #> ew devdb.pop https://example.com/snapshot.zip
     """
+    try:
+        gokapi_plugin.file_id_from(url)
+    except ValueError:
+        downloader = files_plugin
+    else:
+        downloader = gokapi_plugin
+
     folder = ensure_snapshots_folder(name)
     if any(folder.glob("*")):
         if yes or edwh.confirm("A snapshot already exists. Overwrite? [Yn]", default=True):
@@ -560,15 +587,17 @@ def pop(ctx: Context, url: str, yes: bool = False, name: str = "snapshot"):
             print("Not overwriting, okay.")
             return
 
-    with chdir(folder.parent):
-        ext = url.split(".")[-1]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with chdir(tmpdir):
+            downloader.download(ctx, url)
 
-        if folder.name == "snapshot":
-            tmp_file = Path(folder.name).with_suffix(f".{ext}")
-        else:
-            tmp_file = Path(folder.name).with_suffix(f".snapshot.{ext}")
-
-        files_plugin.download(ctx, url, output_file=tmp_file, unpack=True)
+        archives = list(Path(tmpdir).iterdir())
+        if not archives:
+            raise RuntimeError(f"Could not download snapshot from {url!r}")
+        archive = archives[0]
+        tmp_file = folder.parent / f"{folder.name}{archive.suffix}"
+        shutil.move(archive, tmp_file)
+        downloader.do_unpack(ctx, str(tmp_file), remove=True)
 
     print("recover using:")
     cprint("$ edwh devdb.reset", color="blue")
