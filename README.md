@@ -91,15 +91,27 @@ ew devdb.rename <new_name>
 
 #### Push a Snapshot
 
-To push the local snapshot to a remote server:
+To push the local snapshot to Gokapi (the default), first configure an API key with
+`ew gokapi.login`, then run:
 
 ```bash
 ew devdb.push
 ```
 
+Gokapi snapshots allow unlimited downloads and use the server's default expiry.
+
+To upload using the legacy files/transfersh server instead:
+
+```bash
+ew devdb.push --backend files
+```
+
+`--backend transfersh` is also accepted.
+
 #### Pop a Snapshot
 
-To download and prepare a snapshot from a given URL:
+To download and prepare a snapshot from a Gokapi or files/transfersh URL,
+the backend is detected automatically:
 
 ```bash
 ew devdb.pop <url>
