@@ -338,21 +338,90 @@ def run_in_background_with_animation(ctx: Context, command: str, **kwargs: t.Any
     return animate(promise, text=textwrap.shorten(command, 100))
 
 
-@task(aliases=["restore"])
-def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
+def _list_line_table_name(line: str):
+    """
+    Parse the (schema, name) of a TABLE DATA / MATERIALIZED VIEW DATA entry from
+    a ``pg_restore -l`` listing line.
+
+    Example lines:
+        "4441; 0 16561 TABLE DATA click event postgres"
+        "4515; 0 205702816 MATERIALIZED VIEW DATA public bestuur_stats postgres"
+    """
+    tokens = line.split()
+    for i, tok in enumerate(tokens):
+        if tok == "DATA" and i + 2 < len(tokens):
+            return tokens[i + 1], tokens[i + 2]
+    return None, None
+
+
+@task(
+    aliases=["restore"],
+    help=dict(
+        name="Name of the snapshot folder to recover from",
+        verbose="Run pg_restore with --verbose",
+        include="Tables to recover (partial recovery; repeatable). Empty means all tables.",
+        exclude="Tables to exclude from recovery (partial recovery; repeatable)",
+        data_only="Force rows-only restore (also for full recovery)",
+        with_schema="Include schema definitions in partial recovery (disables default data-only)",
+        clean="Drop/truncate target objects before restoring (opt-in, destructive)",
+        disable_triggers="Disable triggers during restore (requires superuser)",
+    ),
+    iterable=("include", "exclude"),
+)
+def recover(
+    ctx: Context,
+    name: str = "snapshot",
+    verbose: bool = True,
+    include: t.Optional[list[str]] = None,
+    exclude: t.Optional[list[str]] = None,
+    data_only: bool = False,
+    with_schema: bool = False,
+    clean: bool = False,
+    disable_triggers: bool = False,
+):
     """
     Recovers the development database from a previously created (popped) snapshot.
     Receive a snapshot using `ew devdb.pop <url>`.
+
+    By default this restores the entire snapshot (schema + data), exactly as before.
+
+    Partial / table-scoped recovery
+    -------------------------------
+    Pass ``--include`` (and/or ``--exclude``) to restore only the selected tables.
+    Partial recovery defaults to ``--data-only`` (rows only) so it does not try to
+    recreate or conflict with an existing schema. Pass ``--no-data-only`` to also
+    restore schema definitions.
+
+    Partial recovery is non-destructive by default: it never truncates or drops
+    existing data. Use ``--clean`` (opt-in, destructive) to drop/truncate target
+    objects before restoring.
+
+    Materialized views are still restored in a second pass, preserving the
+    existing ordering behaviour. Only materialized views matching the selection
+    are restored when a selection is given.
 
     Run `ew help devdb.snapshot` for more info.
 
     Example Usage:
     #> ew devdb.recover
+    #> ew devdb.recover --include=public.foo --include=public.bar
+    #> ew devdb.recover --include=public.foo --data-only
     """
     folder = ensure_snapshots_folder(name, check="nonempty")
     if not any(folder.glob("*")):
         print("Failure: create a snapshot first")
         return
+
+    include = include or []
+    exclude = exclude or []
+    partial = bool(include or exclude)
+
+    # Partial recovery defaults to data-only (rows only) to avoid CREATE/ownership
+    # conflicts against an already-existing schema. Full recovery is unchanged.
+    effective_data_only = data_only or (partial and not with_schema)
+
+    if partial:
+        print(f"Partial recovery: include={include or '*'}, exclude={exclude or '*'}, data_only={effective_data_only}")
 
     print("recovering...")
     postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
@@ -386,17 +455,40 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
 
         # Step 2 & 3: Filter list files locally based on materialized views
         mat_view_found = False
+        any_selected_data = False
+        include_set = set(include)
+        exclude_set = set(exclude)
         with (
             no_mat_views_lst.open("w") as no_mat_file,
             mat_views_lst.open("w") as mat_file,
         ):
-            for line in list_result.stdout.split("\n"):
-                line += "\n"  # sad
-                if "MATERIALIZED VIEW DATA" in line:
+            for raw_line in list_result.stdout.split("\n"):
+                line = raw_line + "\n"  # sad
+                is_mat_view_data = "MATERIALIZED VIEW DATA" in line
+                is_data_line = ("TABLE DATA" in line) or is_mat_view_data
+
+                if partial and is_data_line:
+                    _schema, _name = _list_line_table_name(line)
+                    keep = True
+                    if _schema is not None and _name is not None:
+                        candidates = {_name, f"{_schema}.{_name}"}
+                        if include_set and not (candidates & include_set):
+                            keep = False
+                        if exclude_set and (candidates & exclude_set):
+                            keep = False
+                    if not keep:
+                        continue
+                    any_selected_data = True
+
+                if is_mat_view_data:
                     mat_file.write(line)
                     mat_view_found = True
                 else:
                     no_mat_file.write(line)
+
+        if partial and not any_selected_data:
+            cprint("No matching tables found in the snapshot for the given selection.", color="red")
+            return
 
         # Prepare base restore command.
         # The temporary directory on the host is mounted into the container
@@ -413,6 +505,13 @@ def recover(ctx: Context, name: str = "snapshot", verbose: bool = True):
 
         if verbose:
             base_restore_cmd += " --verbose "
+
+        if effective_data_only:
+            base_restore_cmd += " --data-only "
+        if clean:
+            base_restore_cmd += " --clean --if-exists "
+        if disable_triggers:
+            base_restore_cmd += " --disable-triggers "
 
         # Step 4: Restore non-materialized views first
         print(f"Restoring non-materialized views using '{no_mat_views_lst.name}'...")
