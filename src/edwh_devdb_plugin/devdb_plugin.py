@@ -393,8 +393,14 @@ def recover(
     restore schema definitions.
 
     Partial recovery is non-destructive by default: it never truncates or drops
-    existing data. Use ``--clean`` (opt-in, destructive) to drop/truncate target
-    objects before restoring.
+    existing data. Use ``--clean`` (opt-in, destructive) to drop target objects
+    before restoring. Note that ``--clean`` only affects objects that pg_restore
+    recreates; in ``--data-only`` mode (the partial default) existing rows are
+    not truncated, so combine with a manual wipe if needed.
+
+    ``--with-schema`` restores schema definitions in addition to data. Because
+    list-file filtering only scopes data entries, schema for all snapshot objects
+    may be (re)created in this mode; combine with ``--clean`` for a clean slate.
 
     Materialized views are still restored in a second pass, preserving the
     existing ordering behaviour. Only materialized views matching the selection
@@ -415,6 +421,10 @@ def recover(
     include = include or []
     exclude = exclude or []
     partial = bool(include or exclude)
+
+    if include and exclude:
+        cprint("Conflicting options 'include' and 'exclude'", color="red")
+        return
 
     # Partial recovery defaults to data-only (rows only) to avoid CREATE/ownership
     # conflicts against an already-existing schema. Full recovery is unchanged.
@@ -476,6 +486,10 @@ def recover(
                             keep = False
                         if exclude_set and (candidates & exclude_set):
                             keep = False
+                    else:
+                        # Could not parse this data entry; warn so the selection
+                        # is not silently bypassed.
+                        cprint("Warning: could not parse restore list entry; keeping it.", color="yellow")
                     if not keep:
                         continue
                     any_selected_data = True
@@ -510,8 +524,12 @@ def recover(
             base_restore_cmd += " --data-only "
         if clean:
             base_restore_cmd += " --clean --if-exists "
-        if disable_triggers:
+        if disable_triggers and effective_data_only:
             base_restore_cmd += " --disable-triggers "
+        elif disable_triggers:
+            cprint("--disable-triggers requires data-only restore; enabling --data-only.", color="yellow")
+            base_restore_cmd += " --data-only --disable-triggers "
+            effective_data_only = True
 
         # Step 4: Restore non-materialized views first
         print(f"Restoring non-materialized views using '{no_mat_views_lst.name}'...")
