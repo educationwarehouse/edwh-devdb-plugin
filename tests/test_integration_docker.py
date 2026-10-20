@@ -105,12 +105,14 @@ def _filter_list(snap, include=None, exclude=None, tmp_path=None):
     assert partial is False or any_sel, "no matching tables"
     no_path = str(tmp_path / "no_mat.lst")
     mat_path = str(tmp_path / "mat.lst")
-    open(no_path, "w").write("".join(no_lines))
-    open(mat_path, "w").write("".join(mat_lines))
+    with open(no_path, "w") as f:
+        f.write("".join(no_lines))
+    with open(mat_path, "w") as f:
+        f.write("".join(mat_lines))
     return no_path, mat_path, mat_found
 
 
-def test_full_backup_and_restore_all_options(pg_container, tmp_path):
+def test_full_backup_and_restore_all_options(pg_container, tmp_path):  # noqa: ARG001
     dump_dir = tmp_path / "snap"
     dump_dir.mkdir()
     snap = str(dump_dir)

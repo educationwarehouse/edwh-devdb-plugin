@@ -437,6 +437,10 @@ def recover(
     postgres_uri = edwh.get_env_value("INSIDE_DOCKER_PG_DUMP_URI")
     # Ensure at least 1 thread if cpu_count is 1
     threads = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
+    if partial:
+        # Partial recovery uses a filtered list file; parallel workers can die
+        # unexpectedly on missing dependencies, so stay single-threaded.
+        threads = 1
     snapshot_path_in_container = f"/data/{folder.name}"
 
     with tempfile.TemporaryDirectory(dir="./migrate/data/") as temp_dir_host:
@@ -475,8 +479,62 @@ def recover(
             for raw_line in list_result.stdout.split("\n"):
                 line = raw_line + "\n"  # sad
                 is_mat_view_data = "MATERIALIZED VIEW DATA" in line
-                is_data_line = ("TABLE DATA" in line) or is_mat_view_data
+                is_table_data = "TABLE DATA" in line
+                is_data_line = is_table_data or is_mat_view_data
+                is_sequence_set = "SEQUENCE SET" in line
 
+                # Partial + data-only: keep ONLY data lines and sequence counters
+                # for selected tables. Drop schema/CREATE/DEFAULT entries so
+                # pg_restore does not try to (re)create existing objects.
+                if partial and effective_data_only:
+                    if is_data_line:
+                        _schema, _name = _list_line_table_name(line)
+                        keep = True
+                        if _schema is not None and _name is not None:
+                            candidates = {_name, f"{_schema}.{_name}"}
+                            if include_set and not (candidates & include_set):
+                                keep = False
+                            if exclude_set and (candidates & exclude_set):
+                                keep = False
+                        else:
+                            cprint("Warning: could not parse restore list entry; keeping it.", color="yellow")
+                        if not keep:
+                            continue
+                        any_selected_data = True
+                        if is_mat_view_data:
+                            mat_file.write(line)
+                            mat_view_found = True
+                        else:
+                            no_mat_file.write(line)
+                        continue
+                    if is_sequence_set:
+                        toks = line.split()
+                        keep_seq = True
+                        for i, tok in enumerate(toks):
+                            if tok == "SET" and i + 2 < len(toks):
+                                seq_name = toks[i + 2]
+                                base = seq_name
+                                for suf in ("_id_seq", "_seq"):
+                                    if base.endswith(suf):
+                                        base = base[: -len(suf)]
+                                        break
+                                schema = toks[i + 1] if i + 1 < len(toks) else None
+                                candidates = {base}
+                                if schema:
+                                    candidates.add(f"{schema}.{base}")
+                                if include_set and not (candidates & include_set):
+                                    keep_seq = False
+                                if exclude_set and (candidates & exclude_set):
+                                    keep_seq = False
+                                break
+                        if not keep_seq:
+                            continue
+                        no_mat_file.write(line)
+                        continue
+                    # drop everything else (schema, defaults, etc.)
+                    continue
+
+                # Full / with-schema path: original behaviour
                 if partial and is_data_line:
                     _schema, _name = _list_line_table_name(line)
                     keep = True
@@ -487,8 +545,6 @@ def recover(
                         if exclude_set and (candidates & exclude_set):
                             keep = False
                     else:
-                        # Could not parse this data entry; warn so the selection
-                        # is not silently bypassed.
                         cprint("Warning: could not parse restore list entry; keeping it.", color="yellow")
                     if not keep:
                         continue
