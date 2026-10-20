@@ -165,3 +165,9 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "docker: tests requiring a Docker daemon and PostgreSQL client tools",
+]
+addopts = "-m 'not docker'"

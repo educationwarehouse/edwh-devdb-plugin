@@ -10,8 +10,7 @@ import time
 
 import pytest
 
-RUN = os.environ.get("RUN_DOCKER_TESTS") == "1"
-pytestmark = pytest.mark.skipif(not RUN, reason="set RUN_DOCKER_TESTS=1 to enable")
+pytestmark = pytest.mark.docker
 
 PG_PORT = int(os.environ.get("PG_PORT", "55432"))
 PG_PASSWORD = "testpw"
